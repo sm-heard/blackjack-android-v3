@@ -34,8 +34,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class MainViewModel extends AndroidViewModel implements LifecycleObserver,
-    SharedPreferences.OnSharedPreferenceChangeListener {
+public class MainViewModel extends AndroidViewModel implements LifecycleObserver {
 
   private static final int DEFAULT_DECKS_IN_SHOE = 6;
 
@@ -45,10 +44,6 @@ public class MainViewModel extends AndroidViewModel implements LifecycleObserver
   private EnumSet<RoundState.RuleVariation> variations;
   private CompositeDisposable pending = new CompositeDisposable();
   private int decksPerShoe;
-  private SharedPreferences preferences;
-  private String decksInShoeKey;
-  private String ruleSoft17Key;
-  private String ruleNoHoldCardKey;
 
   private MutableLiveData<Long> roundId;
   private LiveData<Round> round;
@@ -83,14 +78,8 @@ public class MainViewModel extends AndroidViewModel implements LifecycleObserver
     rng = new SecureRandom();
     executor = Executors.newSingleThreadExecutor();
     pending = new CompositeDisposable();
-    // Change the lines below if any rule variations are employed.
-    Resources res = application.getResources();
-    preferences = PreferenceManager.getDefaultSharedPreferences(application);
-    preferences.registerOnSharedPreferenceChangeListener(this);
-    decksInShoeKey = res.getString(R.string.decks_per_shoe_key);
-    ruleNoHoldCardKey = res.getString(R.string.rule_no_hold_card);
-    ruleSoft17Key = res.getString(R.string.rule_soft_17);
-    readSettings();
+    decksPerShoe = DEFAULT_DECKS_IN_SHOE;
+    variations = EnumSet.noneOf(RuleVariation.class);
   }
 
   private void setupBaseLiveData() {
@@ -141,7 +130,7 @@ public class MainViewModel extends AndroidViewModel implements LifecycleObserver
 
   private void createShoe() {
     pending.add(
-        DeckOfCardsService.getInstance().newShoe(DEFAULT_DECKS_IN_SHOE)
+        DeckOfCardsService.getInstance().newShoe(decksPerShoe)
             .subscribeOn(Schedulers.from(executor))
             .subscribe((shoe) -> {
               randomizeShufflePoint(shoe);
@@ -247,28 +236,13 @@ public class MainViewModel extends AndroidViewModel implements LifecycleObserver
     );
   }
 
-  @Override
-  public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
-    readSettings();
-    disposePending();
+  public void newGame(int numDecks, EnumSet<RuleVariation> variations) {
+    this.decksPerShoe = numDecks;
+    this.variations.clear();
+    this.variations.addAll(variations);
+    shoeId = 0;
     startRound();
   }
-
-
-  public void readSettings() {
-
-    boolean useSoft17 = preferences.getBoolean(ruleSoft17Key, false);
-    boolean useNoHoldCard = preferences.getBoolean(ruleNoHoldCardKey, false);
-    decksPerShoe = preferences.getInt(decksInShoeKey, DEFAULT_DECKS_IN_SHOE);
-    variations = EnumSet.noneOf(RoundState.RuleVariation.class);
-    if (useNoHoldCard) {
-      variations.add(RuleVariation.NO_HOLE_CARD);
-    }
-    if (useSoft17) {
-      variations.add(RuleVariation.STAND_ON_SOFT_17);
-    }
-  }
-
 
   private static class PairOfHandsLiveData extends
       MediatorLiveData<Pair<HandWithCards, HandWithCards>> {
